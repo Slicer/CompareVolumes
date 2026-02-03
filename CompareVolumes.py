@@ -253,9 +253,13 @@ class VolumeOrderSelect:
       for observation in self.observations:
         slicer.mrmlScene.RemoveObserver(observation)
 
-    def refresh(self, caller=None, event=None):
+    @vtk.calldata_type(vtk.VTK_OBJECT)
+    def refresh(self, caller=None, event=None, call_data=None):
       """synchronize list items with current volume
       nodes in scene while retaining order and check state"""
+      if call_data is not None:
+        if not call_data.IsA("vtkMRMLVolumeNode"):
+          return
       listModel = self.listWidget.model()
       # first, save the order and checkstate
       previousVolumeIDs = []
