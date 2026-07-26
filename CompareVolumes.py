@@ -791,7 +791,7 @@ class LayerReveal(ViewWatcher):
       self.cursorOn()
       self.sliceView.forceRender()
     elif event == "EnterEvent":
-      self.renderer.AddActor2D(self.actor2D)
+      self.renderer.AddViewProp(self.actor2D)
       if self.layerVolumeNodes['F'] and (self.layerVolumeNodes['F'] != self.layerVolumeNodes['B']):
         self.cursorOff(self.sliceWidget)
     else:
