@@ -121,15 +121,24 @@ class CompareVolumesWidget(ScriptedLoadableModuleWidget):
     # - TODO: this makes odd circular dependency
     #   that may need to be refactored someday,
     #   but for now it works because this widget
-    #   is a common depdency.
+    #   is a common dependency.
     #
     import LandmarkRegistration
     self.visualization = LandmarkRegistration.RegistrationLib.VisualizationWidget(None)
     self.visualization.groupBoxLayout.itemAt(3).widget().hide()
-    self.visualization.groupBoxLayout.itemAt(2).widget().hide()
     parametersFormLayout.addRow(self.visualization.widget)
     self.visualization.connect("layoutRequested(mode,volumesToShow)", self.onLayoutRequested)
     self.visualization.layoutOption = self.visualization.layoutOptions[0]
+    # Add the option to rotate to IJK plane when the grid is not is the same orientation as RAS plane
+    self.useIJKCheck = qt.QCheckBox("Use IJK planes")
+    self.useIJKCheck.toolTip = "Rotate each view to the volume's IJK planes instead of RAS Axial/Sagittal/Coronal"
+    self.visualization.groupBoxLayout.addWidget(self.useIJKCheck)
+    self.useIJKCheck.connect("toggled(bool)", lambda: (self.onCompareVolumes(), slicer.util.resetSliceViews()))
+    # Replace the useless widget with the checkbox
+    oldWidget = self.visualization.groupBoxLayout.itemAt(2).widget()
+    self.visualization.groupBoxLayout.replaceWidget(oldWidget, self.useIJKCheck)
+    oldWidget.hide()
+    oldWidget.deleteLater()
     self.onCompareVolumes()
     self.visualization.onZoom("Fit")
 
@@ -176,12 +185,14 @@ class CompareVolumesWidget(ScriptedLoadableModuleWidget):
     logic = CompareVolumesLogic()
     volumeIDs = self.volumeOrderSelect.volumeIDs()
     volumeNodes = [slicer.mrmlScene.GetNodeByID(id) for id in volumeIDs]
+    rotate_to_IJK = self.useIJKCheck.checked
     if self.visualization.layoutOption == 'Axi/Sag/Cor':
         viewers = logic.viewersPerVolume(
             volumeNodes=volumeNodes,
             background=self.backgroundSelector.currentNode(),
             label=self.labelSelector.currentNode(),
             opacity=self.visualization.fadeSlider.value,
+            rotate_to_IJK=rotate_to_IJK
             )
     else:
         viewers = logic.viewerPerVolume(
@@ -190,6 +201,7 @@ class CompareVolumesWidget(ScriptedLoadableModuleWidget):
             background=self.backgroundSelector.currentNode(),
             label=self.labelSelector.currentNode(),
             opacity=self.visualization.fadeSlider.value,
+            rotate_to_IJK=rotate_to_IJK
             )
     
     # when no volumes are selected, viewers is None
@@ -334,7 +346,7 @@ class CompareVolumesLogic(ScriptedLoadableModuleLogic):
       layoutNode.AddLayoutDescription(layoutNode.SlicerLayoutUserView, layoutDescription)
     layoutNode.SetViewArrangement(layoutNode.SlicerLayoutUserView)
 
-  def viewerPerVolume(self,volumeNodes=None,background=None,label=None,viewNames=[],layout=None,orientation='Axial',opacity=0.5,returnVolumeViewMapping=False):
+  def viewerPerVolume(self,volumeNodes=None,background=None,label=None,viewNames=[],layout=None,orientation='Axial',opacity=0.5,returnVolumeViewMapping=False,rotate_to_IJK=False):
     """ Load each volume in the scene into its own
     slice viewer and link them all together.
     If background is specified, put it in the background
@@ -436,6 +448,8 @@ class CompareVolumesLogic(ScriptedLoadableModuleLogic):
 
       sliceNode = sliceWidget.mrmlSliceNode()
       sliceNode.SetOrientation(orientation)
+      if rotate_to_IJK:
+        sliceNode.RotateToVolumePlane(slicer.mrmlScene.GetNodeByID(volumeNodeID))
       sliceNodesByViewName[viewName] = sliceNode
 
     if returnVolumeViewMapping:
@@ -474,7 +488,7 @@ class CompareVolumesLogic(ScriptedLoadableModuleLogic):
         sliceNode.SetFieldOfView( newFOVx, newFOVy, newFOVz )
         sliceNode.UpdateMatrices()
 
-  def viewersPerVolume(self,volumeNodes=None,background=None,label=None,include3D=False,opacity=0.5,returnVolumeViewMapping=False):
+  def viewersPerVolume(self,volumeNodes=None,background=None,label=None,include3D=False,opacity=0.5,returnVolumeViewMapping=False, rotate_to_IJK=False):
     """ Make an axi/sag/cor(/3D) row of viewers
     for each volume in the scene.
     If background is specified, put it in the background
@@ -551,6 +565,8 @@ class CompareVolumesLogic(ScriptedLoadableModuleLogic):
           compositeNode.SetLabelVolumeID("")
         sliceNode = sliceWidget.mrmlSliceNode()
         sliceNode.SetOrientation(orientation)
+        if rotate_to_IJK:
+          sliceNode.RotateToVolumePlane(volumeNode)
         sliceNodesByViewName[viewName] = sliceNode
 
     if returnVolumeViewMapping:
